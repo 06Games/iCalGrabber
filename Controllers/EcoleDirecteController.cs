@@ -15,8 +15,8 @@ public class EcoleDirecteController : ControllerBase
     private readonly HttpClient Client;
     private readonly ILogger<EcoleDirecteController> Logger;
 
-    private static Calendar? Calendar;
-    private static DateTime LastFetched = DateTime.MinValue;
+    private static readonly Dictionary<string, CalendarValue> Database = new();
+
 
     public EcoleDirecteController(ILogger<EcoleDirecteController> logger)
     {
@@ -44,20 +44,36 @@ public class EcoleDirecteController : ControllerBase
     [HttpGet("ical")]
     public async Task<string> Get([Required] string user, [Required] string pass)
     {
-        if (DateTime.Now - LastFetched >= TimeSpan.FromHours(24))
+        var refresh = false;
+
+        using var sha1 = System.Security.Cryptography.SHA256.Create();
+        var passSha = Convert.ToHexString(sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(pass)));
+        if (Database.TryGetValue(user, out var result))
+        {
+            if (DateTime.Now - result.LastFetched >= TimeSpan.FromHours(24))
+                refresh = true;
+            else if (passSha != result.PasswordSha)
+                throw new ArgumentException("Password is incorrect (if you just changed it, wait 24h)");
+        }
+        else
+            refresh = true;
+
+        if (refresh)
         {
             var (token, children) = await Connect(user, pass);
-            Calendar = new Calendar();
-            Calendar.AddTimeZone(new VTimeZone("Europe/Paris"));
-            Calendar.AddProperty("X-WR-CALNAME", "Ecole Directe");
+            var calendar = new Calendar();
+            calendar.AddTimeZone(new VTimeZone("Europe/Paris"));
+            calendar.AddProperty("X-WR-CALNAME", $"Ecole Directe - {user}");
 
             foreach (var child in children)
-                Calendar.Events.AddRange(await GetSchedule(child, token));
-            LastFetched = DateTime.Now;
+                calendar.Events.AddRange(await GetSchedule(child, token));
+            result = new CalendarValue { PasswordSha = passSha, Calendar = calendar, LastFetched = DateTime.Now };
+            if (Database.ContainsKey(user)) Database[user] = result;
+            else Database.Add(user, result);
         }
 
         var serializer = new CalendarSerializer();
-        var icalString = serializer.SerializeToString(Calendar);
+        var icalString = serializer.SerializeToString(result.Calendar);
         return icalString;
     }
 
@@ -90,4 +106,11 @@ public class EcoleDirecteController : ControllerBase
         });
         return events;
     }
+}
+
+internal class CalendarValue
+{
+    public string? PasswordSha;
+    public Calendar? Calendar;
+    public DateTime LastFetched = DateTime.MinValue;
 }
