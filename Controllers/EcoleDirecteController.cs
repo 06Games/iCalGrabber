@@ -15,7 +15,7 @@ public class EcoleDirecteController : ControllerBase
     private readonly HttpClient Client;
     private readonly ILogger<EcoleDirecteController> Logger;
 
-    private static Calendar Calendar;
+    private static Calendar? Calendar;
     private static DateTime LastFetched = DateTime.MinValue;
 
     public EcoleDirecteController(ILogger<EcoleDirecteController> logger)
@@ -35,7 +35,6 @@ public class EcoleDirecteController : ControllerBase
             isReLogin = false
         };
         var result = await Client.PostAsync("https://api.ecoledirecte.com/v3/login.awp", new StringContent($"data={JsonSerializer.Serialize(param)}"));
-        Logger.LogDebug(await result.Content.ReadAsStringAsync());
         var accountInfos = await JsonSerializer.DeserializeAsync<Login>(await result.Content.ReadAsStreamAsync());
         if (accountInfos == null)
             throw new NullReferenceException(await result.Content.ReadAsStringAsync());
@@ -63,15 +62,15 @@ public class EcoleDirecteController : ControllerBase
 
     private async Task<IEnumerable<CalendarEvent>> GetSchedule(Eleve child, string token)
     {
+        var schoolYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
         var param = new
         {
             token,
-            dateDebut = DateTime.Now.ToString("yyyy-MM-dd"),
-            dateFin = "2022-09-10",
+            dateDebut = new DateTime(schoolYear, 8, 1).ToString("yyyy-MM-dd"),
+            dateFin = new DateTime(schoolYear + 1, 7, 31).ToString("yyyy-MM-dd"),
             avecTrous = false
         };
         var result = await Client.PostAsync($"https://api.ecoledirecte.com/v3/E/{child.id}/emploidutemps.awp?verbe=get&", new StringContent($"data={JsonSerializer.Serialize(param)}"));
-        Logger.LogDebug(await result.Content.ReadAsStringAsync());
         var json = await JsonSerializer.DeserializeAsync<EmploiDuTemps>(await result.Content.ReadAsStreamAsync());
         if (json == null)
             throw new NullReferenceException(await result.Content.ReadAsStringAsync());
