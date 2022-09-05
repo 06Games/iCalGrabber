@@ -48,6 +48,7 @@ public class EcoleDirecteController : ControllerBase
         {
             var (token, children) = await Connect(user, pass);
             Calendar = new Calendar();
+            Calendar.AddTimeZone(new VTimeZone("Europe/Paris"));
             Calendar.AddProperty("X-WR-CALNAME", "Ecole Directe");
 
             foreach (var child in children)
@@ -80,8 +81,8 @@ public class EcoleDirecteController : ControllerBase
             Uid = v.id.ToString(),
             Summary = v.matiere,
             Organizer = new Organizer { CommonName = v.prof },
-            DtStart = new CalDateTime(DateTime.Parse(v.start_date)),
-            DtEnd = new CalDateTime(DateTime.Parse(v.end_date)),
+            DtStart = new CalDateTime(DateTime.Parse(v.start_date), "Europe/Paris"),
+            DtEnd = new CalDateTime(DateTime.Parse(v.end_date), "Europe/Paris"),
             Location = v.salle,
             Status = v.isAnnule ? "CANCELLED" : null,
             Categories = new[] { child.id.ToString() },
